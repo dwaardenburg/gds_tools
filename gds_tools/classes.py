@@ -305,7 +305,7 @@ class Waveguide:
             endpoint_directions (dict, optional): dictionairy defining the endpoint directions. Defaults to None.
         """
 
-        self.type = 'waveguide'
+        self.type = 'Waveguide'
         self.paths = path_list
         self.path_types = path_types
         self.layer_specs = layer_specs

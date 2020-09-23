@@ -481,7 +481,7 @@ def pathfinder(GdsMap,
                to_direction=None,
                distances=None,
                path_buffer_distance=0,
-               distance_from_point=None,
+               distance_to_point=None,
                layer=0,
                precision=1):
 
@@ -498,12 +498,16 @@ def pathfinder(GdsMap,
 
     if not isinstance(distances, list):
         if distances is None:
-            distances = np.inf
+            distances = 0
         distances = [distances]
 
-    if from_end != to_end != None:
-        from_point = from_object.endpoints[from_end]
-        to_point = to_object.endpoints[to_end]
+    if from_end != None and to_end != None:
+        if from_direction != None and to_direction != None:
+            from_point = (from_object.endpoints[from_end][0] + width[0] * np.cos(from_direction), from_object.endpoints[from_end][1] + width[0] * np.sin(from_direction))
+            to_point = (to_object.endpoints[to_end][0] + width[-1] * np.cos(to_direction), to_object.endpoints[to_end][1] + width[-1] * np.sin(to_direction))
+        else:
+            from_point = from_object.endpoints[from_end]
+            to_point = to_object.endpoints[to_end]
     else:
         if from_direction != None and to_direction != None:
             from_point = (from_object[0] + width[0] * np.cos(from_direction), from_object[1] + width[0] * np.sin(from_direction))
@@ -512,9 +516,8 @@ def pathfinder(GdsMap,
             from_point = from_object
             to_point = to_object
 
-
-    distance_from_point = distance_from_point if distance_from_point is not None else from_point
-
+    distance_to_point = distance_to_point if distance_to_point is not None else to_point
+        
     sqrt_two = round(np.sqrt(2), precision)
 
     start_point_distance_array = array_heuristic(GdsMap.x_array,
@@ -532,9 +535,6 @@ def pathfinder(GdsMap,
     end_point = (end_point_index % GdsMap.x_length,
                  end_point_index // GdsMap.x_length)
 
-    # elapsed_time = round(time.time() - start_time, 3)
-    # print('--- Found approximate end points in ' + str(elapsed_time) + 's ---')
-
     start_time = time.time()
     route = jump_point_astar(GdsMap.mask, start_point, end_point)
     elapsed_time = round(time.time() - start_time, 3)
@@ -545,13 +545,13 @@ def pathfinder(GdsMap,
 
     routed_path = []
     if from_direction != None and to_direction != None:
-        routed_path.append(from_object)
+        routed_path.append(from_object.endpoints[from_end])
     else:
         routed_path.append(from_point)
     for point in route:
         routed_path.append(GdsMap.xy_array[point[1]][point[0]])
     if from_direction != None and to_direction != None:
-        routed_path.append(to_object)
+        routed_path.append(to_object.endpoints[from_end])
     else:
         routed_path.append(to_point)
 
@@ -566,15 +566,14 @@ def pathfinder(GdsMap,
     for i in range(1, path_length - 2):
         for neighbour in neighbours:
             GdsMap.mask[route[i - 1][1] + neighbour[1]][route[i - 1][0] + neighbour[0]] = 1
-        if bipoint_angle(routed_path[i - 1], routed_path[i]) == bipoint_angle(
-                routed_path[i], routed_path[i + 1]):
-            if distances[index] > heuristic(routed_path[i], distance_from_point, GdsMap.grid_size):
-                remove_index_list.append(i)
-            else:
+        if bipoint_angle(routed_path[i - 1], routed_path[i]) == bipoint_angle(routed_path[i], routed_path[i + 1]):
+            if heuristic(routed_path[i], distance_to_point, GdsMap.grid_size) < distances[index]:
                 new_path_point_list.append(routed_path[i])
                 index += 1
                 virtual_path_width = width[index] + 2 * path_buffer_distance[index]
                 neighbours, _ = get_neighbours(GdsMap, virtual_path_width)
+            else:
+                remove_index_list.append(i)
 
     if from_direction != None and to_direction != None:
         routed_path[1] = from_point

@@ -197,20 +197,26 @@ def add(cell, objectlist):
     # Arguments:    cell        :   gdspy cell object                       ||
     #               objectlist  :   list of GDStructure objects             ||
     #=========================================================================
-    if type(objectlist) is not type([]):
+    if not isinstance(objectlist, list):
         objectlist = [objectlist]
 
     structs = []
-    for i in objectlist:
-        if i.structure:
-            if type(i.structure) is type([]):
-                for structure in i.structure:
-                    structs.append(structure)
+    for object in objectlist:
+        if not isinstance(object, list):
+            if type(object) == gdst.classes.GDStructure or type(object) == gdst.classes.Waveguide:
+                if object.structure:
+                    if isinstance(object.structure, list):
+                        for structure in object.structure:
+                            structs.append(structure)
+                    else:
+                        structs.append(object.structure)
+                    
+                    if object.compound:
+                        gdst.add(cell, object.compound)
             else:
-                structs.append(i.structure)
-            
-            if i.compound:
-                gdst.add(cell, i.compound)
+                cell.add(object)
+        else:
+            gdst.add(cell, object)
 
     cell.add(structs)
 
@@ -298,3 +304,9 @@ def convert_to_dxf(filename):
     print("-- Converting to DXF --")
     # Convert GDS to DXF with Klayout
     os.system('/Applications/klayout.app/Contents/MacOS/klayout -zz -rd input="{}.gds" -rd output="{}.dxf" -r convert.rb'.format(filename, filename))
+
+def bounding_box_center(object):
+    bounding_box = object.get_bounding_box()
+    bounding_box_x = (bounding_box[1][0] + bounding_box[0][0]) / 2
+    bounding_box_y = (bounding_box[1][1] + bounding_box[0][1]) / 2
+    return (bounding_box_x, bounding_box_y)
