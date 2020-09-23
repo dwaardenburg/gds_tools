@@ -1,18 +1,17 @@
 
-import sys,os
-import copy
-import gdspy as gd
+import sys, os, copy, cProfile, pstats, io
+
 import numpy as np
-import gds_tools as gtools
-import cProfile, pstats, io
+import gdspy as gp
+import gds_tools as gdst
 from recordclass import recordclass
 
 def profile(fnc):
-
+    
     """A decorator that uses cProfile to profile a function"""
-
+    
     def inner(*args, **kwargs):
-
+        
         pr = cProfile.Profile()
         pr.enable()
         retval = fnc(*args, **kwargs)
@@ -121,7 +120,7 @@ def flatten(objectlist, endpoints, endpoint_dims, layer = 0):
     for i in objectlist:
         objs.append(i.structure)
 
-    return gtools.classes.GDStructure(gd.fast_boolean(objs, None, 'or', layer = layer), ends, epsz)
+    return gdst.classes.GDStructure(gp.boolean(objs, None, 'or', layer = layer), ends, epsz)
 
 def lattice(cell, repeat, spacing):
     #============================
@@ -131,15 +130,15 @@ def lattice(cell, repeat, spacing):
     #               repeat      :   (n_x, n_y) vector with amount of cells  ||
     #               spacing     :   sapce between unit cells                ||
     #=========================================================================
-    array = gd.CellArray(cell, repeat[0], repeat[1], spacing)
+    array = gp.CellArray(cell, repeat[0], repeat[1], spacing)
     ends = {'A': (0, spacing[1] * repeat[1] / 2), 'B': (spacing[0] * (repeat[0] - 1) / 2, spacing[1] * (repeat[1] - 1/2))}
     epsz = {'A': 0, 'B': 0}
 
-    return gtools.classes.GDStructure(array, ends, epsz)
+    return gdst.classes.GDStructure(array, ends, epsz)
 
 def lattice_cutter(lattice, objectlist, mode = 'and', layer = 0):
     #=====================================
-    # Cut a lattice up using fast_boolean \\
+    # Cut a lattice up using boolean \\
     #=========================================================================
     # Arguments:    lattice     :   output of lattice() function            ||
     #               objectlist  :   list of objects that intersect lattice  ||
@@ -152,7 +151,7 @@ def lattice_cutter(lattice, objectlist, mode = 'and', layer = 0):
     for i in objectlist:
         if i.compound:
             lattice = lattice_cutter(lattice, i.compound)
-        lattice.structure = gd.fast_boolean(lattice.structure, i.structure, mode, layer = layer)
+        lattice.structure = gp.boolean(lattice.structure, i.structure, mode, layer = layer)
 
     return lattice
 
@@ -209,9 +208,9 @@ def add(cell, objectlist):
                     structs.append(structure)
             else:
                 structs.append(i.structure)
-
+            
             if i.compound:
-                gtools.add(cell, i.compound)
+                gdst.add(cell, i.compound)
 
     cell.add(structs)
 
@@ -229,18 +228,20 @@ def mirror(p):
     return p
 
 def symm_coords(points, mirror_x = True, mirror_y = True):
-
-    if type(points) is not 'list':
+    
+    if not isinstance(points, list):
         points = [points]
-
+    
     output_points = copy.deepcopy(points)
 
-    for i, val in enumerate(points):
-        if mirror_y:
+    if mirror_y:
+        for i, val in enumerate(points):
             output_points.append((-val[0], val[1]))
-        if mirror_x:
+    if mirror_x:
+        for i, val in enumerate(points):
             output_points.append((val[0], -val[1]))
-        if mirror_x and mirror_y:
+    if mirror_x and mirror_y:
+        for i, val in enumerate(points):
             output_points.append((-val[0], -val[1]))
     return output_points
 
@@ -251,8 +252,7 @@ def save(cell, filename, unit = 1e-6, precision = 1e-9):
     # Arguments:    cell        :   gdspy cell object or a list of cells    ||
     #               filename    :   filename to write to (relative path)    ||
     #=========================================================================
-    writer = gd.GdsWriter(filename, unit = unit, precision = precision)
-    print(cell)
+    writer = gp.GdsWriter(filename, unit = unit, precision = precision)
     if type(cell) == type([]):
         for cell_item in cell:
             writer.write_cell(cell_item)
@@ -260,6 +260,16 @@ def save(cell, filename, unit = 1e-6, precision = 1e-9):
         writer.write_cell(cell)
 
     return writer.close()
+
+def biquadratic_func(x):
+    return x ** 2 * (2 - x ** 2)
+
+def rotate_reference_cell(reference, angle, center = (0, 0)):
+    dx = np.cos(angle) * (reference.origin[0] - center[0]) - np.sin(angle) * (reference.origin[1] - center[1]) + center[0]
+    dy = np.sin(angle) * (reference.origin[0] - center[0]) + np.cos(angle) * (reference.origin[1] - center[1]) + center[1]
+    angle_deg = np.degrees(angle)
+    reference.rotation += angle_deg
+    reference.translate(dx - reference.origin[0], dy - reference.origin[1])
 
 def inside(points, cellref, dist, nop = 3, precision = 0.001):
     #=====================
@@ -281,4 +291,10 @@ def inside(points, cellref, dist, nop = 3, precision = 0.001):
         py = np.linspace(p[1] - dist/2, p[1] + dist/2, nop)
         search_ps.append([[i, j] for i in px for j in py])
 
-    return gd.inside(search_ps, cellref, precision = precision)
+    return gp.inside(search_ps, cellref, precision = precision)
+
+def convert_to_dxf(filename):
+
+    print("-- Converting to DXF --")
+    # Convert GDS to DXF with Klayout
+    os.system('/Applications/klayout.app/Contents/MacOS/klayout -zz -rd input="{}.gds" -rd output="{}.dxf" -r convert.rb'.format(filename, filename))

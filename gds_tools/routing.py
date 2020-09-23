@@ -1,8 +1,10 @@
+import time, heapq, copy
+
 import numpy as np
+import numpy.ma as ma
 import scipy.spatial as sp
-import copy
-import gdspy as gd
-import gds_tools as gtools
+import gdspy as gp
+import gds_tools as gdst
 
 #===========================
 # Make a transmission line  \\
@@ -19,11 +21,11 @@ def line(dxy, width, width_end = False, layer = 0, datatype = 0):
     p = [(0, 0), dxy]
     w = [width, width_end]
 
-    poly = gd.PolyPath(p, w, layer = layer, datatype = datatype)
+    poly = gp.PolyPath(p, w, layer = layer, datatype = datatype)
     ends = {'A': p[0], 'B': p[-1]}
     epsz = {'A': w[0], 'B': w[-1]}
 
-    return gtools.classes.GDStructure(poly, ends, epsz)
+    return gdst.classes.GDStructure(poly, ends, epsz)
 
 #================================================
 # Generate a meander \\ Author: Marta Pita Vidal \\
@@ -46,7 +48,7 @@ def meander(n, width, radius, meander_length, connect_length, layer = 0):
     yBase = connect_length
 
     # Start path
-    meander_path = gd.Path(w, (0, 0))
+    meander_path = gp.Path(w, (0, 0))
     meander_path.segment(yBase, np.pi/2, layer = layer).turn(w/2, 'r', layer = layer).segment(xMeander - w/2, layer = layer).turn(d, 'll', layer = layer).segment(xMeander, layer = layer)
 
     # Generate periodic meanders
@@ -57,7 +59,7 @@ def meander(n, width, radius, meander_length, connect_length, layer = 0):
     meander_path.segment(xMeander, layer = layer).turn(d, 'rr', layer = layer).segment(xMeander - w/2, layer = layer).turn(w/2, 'l', layer = layer).segment(yBase, '+y', layer = layer)
 
     # Create object
-    struct = gtools.classes.GDStructure(meander_path, {'A': (0, 0), 'B': (meander_path.x, meander_path.y)}, {'A': w, 'B': w})
+    struct = gdst.classes.GDStructure(meander_path, {'A': (0, 0), 'B': (meander_path.x, meander_path.y)}, {'A': w, 'B': w})
 
     return struct
 
@@ -80,8 +82,8 @@ def splitter(n, width, length, space, layer = 0):
     for i in range(0, n):
         p += [(length, (n*width + (n-1)*space)/2 - i*(space + width) - width / 2)]
 
-        ends[gtools.alphabet[i + 1]] = (length, p[-1][1] - width / 2)
-        epsz[gtools.alphabet[i + 1]] = width
+        ends[gdst.alphabet[i + 1]] = (length, p[-1][1] - width / 2)
+        epsz[gdst.alphabet[i + 1]] = width
 
         p += [(length, (n*width + (n-1)*space)/2 - i*(space + width) - width - width / 2)]
         p += [(length / 2 + width / 2, (n*width + (n-1)*space)/2 - i*(space + width) - width - width / 2)]
@@ -93,9 +95,9 @@ def splitter(n, width, length, space, layer = 0):
     p += [(length / 2 - width / 2, -width)]
     p += [(0, -width)]
 
-    poly = gd.Polygon(p, layer = layer)
+    poly = gp.Polygon(p, layer = layer)
 
-    return gtools.classes.GDStructure(poly, ends, epsz)
+    return gdst.classes.GDStructure(poly, ends, epsz)
 
 # Helper function, returns indeces of neighbouring points (u, d, l, r) in a grid
 def lookaround(index, row_len, pref = 'y'):
@@ -162,11 +164,11 @@ def router(cell, fr_str, fr_ep, to_str, to_ep, width, bmul, grid_s = 1, xr = Fal
     p_d_to = np.array(p_d_to)
 
     # Build list of points that are inside a structure
-    cell_ref = gd.CellReference(cell)
+    cell_ref = gp.CellReference(cell)
     if detect == 'native':
-        inside = np.array(gd.inside(p, cell_ref, precision = precision))
+        inside = np.array(gp.inside(p, cell_ref, precision = precision))
     elif detect == 'custom':
-        inside = np.array(gtools.funcs.inside(p, cell_ref, dist = dist_multi*grid_s, nop = nop, precision = precision))
+        inside = np.array(gdst.funcs.inside(p, cell_ref, dist = dist_multi*grid_s, nop = nop, precision = precision))
     else:
         raise ValueError('Parameter \'detect\' is only allowed to have values [\'native\', \'custom\'], cannot continue')
 
@@ -213,9 +215,9 @@ def router(cell, fr_str, fr_ep, to_str, to_ep, width, bmul, grid_s = 1, xr = Fal
 
                     if debug:
                         # Visualize
-                        circ = gd.Round(p[nb], 0.1, layer = 10)
+                        circ = gp.Round(p[nb], 0.1, layer = 10)
                         cell.add(circ)
-                        txt = gd.Text(str(k), 0.5, p[nb], layer = 11)
+                        txt = gp.Text(str(k), 0.5, p[nb], layer = 11)
                         cell.add(txt)
 
                     break
@@ -232,9 +234,9 @@ def router(cell, fr_str, fr_ep, to_str, to_ep, width, bmul, grid_s = 1, xr = Fal
 
                     if debug:
                         # Visualize
-                        circ = gd.Round(p[nb], 0.1, layer = 1)
+                        circ = gp.Round(p[nb], 0.1, layer = 1)
                         cell.add(circ)
-                        txt = gd.Text(str(k), 0.5, p[nb], layer = 2)
+                        txt = gp.Text(str(k), 0.5, p[nb], layer = 2)
                         cell.add(txt)
 
         start_i = copy.copy(next_start_i)
@@ -280,16 +282,16 @@ def router(cell, fr_str, fr_ep, to_str, to_ep, width, bmul, grid_s = 1, xr = Fal
 
     # Create backtraced path
     if pathmethod == 'poly':
-        r = gd.PolyPath(backtraced, ws, layer = layer)
+        r = gp.PolyPath(backtraced, ws, layer = layer)
     elif pathmethod == 'flex':
-        r = gd.FlexPath(backtraced, ws, corners = 'smooth', layer = layer)
+        r = gp.FlexPath(backtraced, ws, corners = 'smooth', layer = layer)
     else:
         raise ValueError('Parameter \'pathmethod\' only has allowed values [\'poly\', \'flex\']')
 
     ends = {'A': backtraced[0], 'B': backtraced[-1]}
     epsz = {'A': ws[0] if not uniform_width else width, 'B': ws[-1] if not uniform_width else width}
 
-    structure = gtools.classes.GDStructure(r, ends, epsz)
+    structure = gdst.classes.GDStructure(r, ends, epsz)
 
     # Connect to 'to' and 'from' structures
     fr_str.next['AUTOROUTE_A'] = structure
@@ -298,3 +300,299 @@ def router(cell, fr_str, fr_ep, to_str, to_ep, width, bmul, grid_s = 1, xr = Fal
     structure.prev['AUTOROUTE_B'] = to_str
 
     return structure
+
+class GdsMap:
+    def __init__(self, cell, grid_size, buffer=None, layers=None, precision=0.001):
+
+        self.grid_size = grid_size
+
+        start_time = time.time()
+        print('--- Constructing map ---')
+
+        if layers is None:
+            layers = list(cell.get_layers())
+        if not isinstance(layers, list):
+            layers = [layers]
+        
+        if buffer is None:
+            buffer = grid_size
+
+        bounding_box = cell.get_bounding_box()
+        x_length = int((bounding_box[1][0] - bounding_box[0][0] + 2 * grid_size) / grid_size) + 1
+        y_length = int((bounding_box[1][1] - bounding_box[0][1] + 2 * grid_size) / grid_size) + 1
+        x_linspace = np.linspace(bounding_box[0][0] - grid_size,
+                                 bounding_box[1][0] + grid_size,
+                                 x_length)
+        y_linspace = np.flip(np.linspace(bounding_box[0][1] - grid_size,
+                                         bounding_box[1][1] + grid_size,
+                                         y_length))
+        x_array, y_array = np.meshgrid(x_linspace, y_linspace)
+        xy_array = np.array(list(zip(x_array.ravel(),
+                                     y_array.ravel()))).reshape(*x_array.shape, 2)
+        self.mask = np.zeros((y_length, x_length))
+
+        cell_copy = cell.copy(cell.name + "_copy",
+                              deep_copy=True)
+        cell_copy.remove_polygons(lambda pts, layer, datatype: layer not in layers)
+        map_gdspy = np.array(gp.inside(np.array(xy_array).reshape(-1, 2),
+                                       gp.CellReference(cell_copy),
+                                       precision=precision)).reshape((y_length, x_length))
+
+        neighbours, grid_distance = get_neighbours(self, buffer)
+
+        for i in range(y_length):
+            for j in range(x_length):
+                if not map_gdspy[i][j]:
+                    if self.mask[i][j] != 1:
+                        self.mask[i][j] = 0
+                else:
+                    if grid_distance == 1:
+                        self.mask[i][j] = self.mask[i - 1][j] = self.mask[i + 1][j] = self.mask[i][j - 1] = self.mask[i][j + 1] = 1
+                    else:
+                        for neighbour in neighbours:
+                            try:
+                                self.mask[i + neighbour[0]][j + neighbour[1]] = 1
+                            except:
+                                pass
+
+        elapsed_time = round(time.time() - start_time, 3)
+        print('--- Constructed map in ' + str(elapsed_time) + 's ---')
+
+        self.x_length = x_length
+        self.y_length = y_length
+        self.x_linspace = x_linspace
+        self.y_linspace = y_linspace
+        self.x_array = x_array
+        self.y_array = y_array
+        self.xy_array = xy_array
+
+def heuristic(point_a, point_b, grid_size, sqrt_two=1.4):
+    delta_x = abs(point_a[0] - point_b[0])
+    delta_y = abs(point_a[1] - point_b[1])
+    edge_dist = grid_size
+    diag_dist = sqrt_two * grid_size
+    distance = edge_dist * max(delta_x, delta_y) + (diag_dist - edge_dist) * min(delta_x, delta_y)
+    return distance
+
+def array_heuristic(x_array, y_array, point, grid_size, sqrt_two=1.4):
+    delta_x = np.absolute(x_array - point[0])
+    delta_y = np.absolute(y_array - point[1])
+    edge_dist = grid_size
+    diag_dist = sqrt_two * grid_size
+    distance = edge_dist * np.maximum(delta_x, delta_y) + (diag_dist - edge_dist) * np.minimum(delta_x, delta_y)
+    return distance
+
+def bipoint_angle(point_a, point_b):
+    delta_x = point_b[0] - point_a[0]
+    delta_y = point_b[1] - point_a[1]
+    theta = np.arctan2(delta_y, delta_x)
+    return theta
+
+def blocked(point, delta_x, delta_y, mask):
+    if point[0] + delta_x < 0 or point[0] + delta_x >= mask.shape[1]:
+        return True
+    if point[1] + delta_y < 0 or point[1] + delta_y >= mask.shape[0]:
+        return True
+    if delta_x != 0 and delta_y != 0:
+        if mask[point[1]][point[0] + delta_x] == 1 and mask[point[1] + delta_y][point[0]] == 1:
+            return True
+        if mask[point[1] + delta_y][point[0] + delta_x] == 1:
+            return True
+    else:
+        if delta_x != 0:
+            if mask[point[1]][point[0] + delta_x] == 1:
+                return True
+        else:
+            if mask[point[1] + delta_y][point[0]] == 1:
+                return True
+    return False
+
+def jump_point_astar(mask, start_point, end_point, grid_size=100, sqrt_two=1.4):
+    closed_set = set()
+    came_from = {}
+    g_score = {start_point: 0}
+    f_score = {start_point: heuristic(start_point, end_point, grid_size, sqrt_two)}
+
+    point_queue = []
+
+    heapq.heappush(point_queue, (f_score[start_point], start_point))
+
+    while point_queue:
+
+        current_pos = heapq.heappop(point_queue)[1]
+        if current_pos == end_point:
+            route = []
+            while current_pos in came_from:
+                route.append(current_pos)
+                current_pos = came_from[current_pos]
+            route.append(start_point)
+            route = list(reversed(route[::]))
+            return route
+
+        closed_set.add(current_pos)
+        for delta_x, delta_y in [(0, 1),
+                                 (0, -1),
+                                 (1, 0),
+                                 (-1, 0),
+                                 (1, 1),
+                                 (1, -1),
+                                 (-1, 1),
+                                 (-1, -1)]:
+
+            if blocked(current_pos, delta_x, delta_y, mask):
+                continue
+
+            neighbour = current_pos[0] + delta_x, current_pos[1] + delta_y
+
+            if delta_x != 0 and delta_y != 0:
+                tentative_g_score = g_score[current_pos] + sqrt_two * grid_size
+            else:
+                tentative_g_score = g_score[current_pos] + grid_size
+
+            if neighbour in closed_set:
+                continue
+
+            if tentative_g_score < g_score.get(
+                    neighbour, 0) or neighbour not in [i[1] for i in point_queue]:
+                came_from[neighbour] = current_pos
+                g_score[neighbour] = tentative_g_score
+                f_score[neighbour] = tentative_g_score + heuristic(
+                    neighbour, end_point, grid_size, sqrt_two)
+                heapq.heappush(point_queue, (f_score[neighbour], neighbour))
+    return False
+
+def get_neighbours(GdsMap, distance):
+    grid_distance = int((distance - distance % GdsMap.grid_size) / (2 * GdsMap.grid_size) + 1)
+    if grid_distance == 1:
+        neighbours = [(0, 0), (0, 1), (0, -1), (1, 0), (-1, 0)]
+    else:
+        neighbours = [(i, j)
+                        for i in range(-grid_distance, grid_distance + 1)
+                        for j in range(-grid_distance, grid_distance + 1)]
+    return neighbours, grid_distance
+
+def pathfinder(GdsMap,
+               width,
+               from_object,
+               to_object,
+               from_end=None,
+               to_end=None,
+               from_direction=None,
+               to_direction=None,
+               distances=None,
+               path_buffer_distance=0,
+               distance_from_point=None,
+               layer=0,
+               precision=1):
+
+    if not isinstance(width, list):
+        width = [width]
+    width = np.array(width)
+
+    if not isinstance(path_buffer_distance, list):
+        path_buffer_distance = [path_buffer_distance] * len(width)
+    path_buffer_distance = np.array(path_buffer_distance)
+
+    if not isinstance(layer, list):
+        layer = [layer]
+
+    if not isinstance(distances, list):
+        if distances is None:
+            distances = np.inf
+        distances = [distances]
+
+    if from_end != to_end != None:
+        from_point = from_object.endpoints[from_end]
+        to_point = to_object.endpoints[to_end]
+    else:
+        if from_direction != None and to_direction != None:
+            from_point = (from_object[0] + width[0] * np.cos(from_direction), from_object[1] + width[0] * np.sin(from_direction))
+            to_point = (to_object[0] + width[-1] * np.cos(to_direction), to_object[1] + width[-1] * np.sin(to_direction))
+        else:
+            from_point = from_object
+            to_point = to_object
+
+
+    distance_from_point = distance_from_point if distance_from_point is not None else from_point
+
+    sqrt_two = round(np.sqrt(2), precision)
+
+    start_point_distance_array = array_heuristic(GdsMap.x_array,
+                                                 GdsMap.y_array, from_point,
+                                                 GdsMap.grid_size)
+    end_point_distance_array = array_heuristic(GdsMap.x_array,
+                                               GdsMap.y_array, to_point,
+                                               GdsMap.grid_size)
+    start_point_index = ma.MaskedArray.argmin(
+        ma.array(start_point_distance_array, mask=GdsMap.mask))
+    end_point_index = ma.MaskedArray.argmin(
+        ma.array(end_point_distance_array, mask=GdsMap.mask))
+    start_point = (start_point_index % GdsMap.x_length,
+                   start_point_index // GdsMap.x_length)
+    end_point = (end_point_index % GdsMap.x_length,
+                 end_point_index // GdsMap.x_length)
+
+    # elapsed_time = round(time.time() - start_time, 3)
+    # print('--- Found approximate end points in ' + str(elapsed_time) + 's ---')
+
+    start_time = time.time()
+    route = jump_point_astar(GdsMap.mask, start_point, end_point)
+    elapsed_time = round(time.time() - start_time, 3)
+    if not route:
+        print('--- Path not found after ' + str(elapsed_time) + 's ---')
+        return False
+    print('--- Found route in ' + str(elapsed_time) + 's ---')
+
+    routed_path = []
+    if from_direction != None and to_direction != None:
+        routed_path.append(from_object)
+    else:
+        routed_path.append(from_point)
+    for point in route:
+        routed_path.append(GdsMap.xy_array[point[1]][point[0]])
+    if from_direction != None and to_direction != None:
+        routed_path.append(to_object)
+    else:
+        routed_path.append(to_point)
+
+    index = 0
+    virtual_path_width = width[index] + 2 * path_buffer_distance[index]
+    neighbours, _ = get_neighbours(GdsMap, virtual_path_width)
+
+    # Remove trivial points
+    remove_index_list = []
+    new_path_point_list = []
+    path_length = len(routed_path)
+    for i in range(1, path_length - 2):
+        for neighbour in neighbours:
+            GdsMap.mask[route[i - 1][1] + neighbour[1]][route[i - 1][0] + neighbour[0]] = 1
+        if bipoint_angle(routed_path[i - 1], routed_path[i]) == bipoint_angle(
+                routed_path[i], routed_path[i + 1]):
+            if distances[index] > heuristic(routed_path[i], distance_from_point, GdsMap.grid_size):
+                remove_index_list.append(i)
+            else:
+                new_path_point_list.append(routed_path[i])
+                index += 1
+                virtual_path_width = width[index] + 2 * path_buffer_distance[index]
+                neighbours, _ = get_neighbours(GdsMap, virtual_path_width)
+
+    if from_direction != None and to_direction != None:
+        routed_path[1] = from_point
+        routed_path[-2] = to_point
+
+    for index in reversed(remove_index_list):
+        del routed_path[index]
+    path_length = len(routed_path)
+    print('--- Removed ' + str(len(remove_index_list)) +
+          ' trivial points from route ---')
+
+    route_segments = []
+    for segment_point in new_path_point_list:
+        for i, route_point in enumerate(routed_path):
+            if np.array_equal(route_point, segment_point):
+                route_segments.append(routed_path[:i + 1])
+                routed_path = routed_path[i:]
+                break
+    route_segments.append(routed_path)
+
+    return route_segments
