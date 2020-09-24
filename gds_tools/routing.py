@@ -366,7 +366,7 @@ class GdsMap:
         self.y_array = y_array
         self.xy_array = xy_array
 
-def heuristic(point_a, point_b, grid_size, sqrt_two=1.4):
+def heuristic(point_a, point_b, grid_size = 1, sqrt_two=1.4):
     delta_x = abs(point_a[0] - point_b[0])
     delta_y = abs(point_a[1] - point_b[1])
     edge_dist = grid_size
@@ -472,92 +472,78 @@ def get_neighbours(GdsMap, distance):
     return neighbours, grid_distance
 
 def pathfinder(GdsMap,
-               width,
-               from_object,
-               to_object,
-               from_end=None,
-               to_end=None,
-               from_direction=None,
-               to_direction=None,
-               distances=None,
-               path_buffer_distance=0,
-               distance_to_point=None,
-               layer=0,
-               precision=1):
+               end_points,
+               directions = None,
+               path_width = None,
+               segment_distances = 0,
+               reference_point = None,
+               path_buffer_distance = 0):
 
-    if not isinstance(width, list):
-        width = [width]
-    width = np.array(width)
+    if not isinstance(path_width, list):
+        path_width = [path_width]
+    path_width = np.array(path_width)
 
     if not isinstance(path_buffer_distance, list):
-        path_buffer_distance = [path_buffer_distance] * len(width)
+        path_buffer_distance = [path_buffer_distance] * len(path_width)
     path_buffer_distance = np.array(path_buffer_distance)
 
-    if not isinstance(layer, list):
-        layer = [layer]
+    if not isinstance(segment_distances, list):
+        segment_distances = [segment_distances]
 
-    if not isinstance(distances, list):
-        if distances is None:
-            distances = 0
-        distances = [distances]
-
-    if from_end != None and to_end != None:
-        if from_direction != None and to_direction != None:
-            from_point = (from_object.endpoints[from_end][0] + width[0] * np.cos(from_direction), from_object.endpoints[from_end][1] + width[0] * np.sin(from_direction))
-            to_point = (to_object.endpoints[to_end][0] + width[-1] * np.cos(to_direction), to_object.endpoints[to_end][1] + width[-1] * np.sin(to_direction))
-        else:
-            from_point = from_object.endpoints[from_end]
-            to_point = to_object.endpoints[to_end]
+    if directions != None:
+        from_point = (end_points[0][0] + path_width[0] * np.cos(directions[0]), end_points[0][1] + path_width[0] * np.sin(directions[0]))
+        to_point = (end_points[1][0] + path_width[-1] * np.cos(directions[1]), end_points[1][1] + path_width[-1] * np.sin(directions[1]))
     else:
-        if from_direction != None and to_direction != None:
-            from_point = (from_object[0] + width[0] * np.cos(from_direction), from_object[1] + width[0] * np.sin(from_direction))
-            to_point = (to_object[0] + width[-1] * np.cos(to_direction), to_object[1] + width[-1] * np.sin(to_direction))
-        else:
-            from_point = from_object
-            to_point = to_object
+        from_point = end_points[0]
+        to_point = end_points[1]
 
-    distance_to_point = distance_to_point if distance_to_point is not None else to_point
-        
-    sqrt_two = round(np.sqrt(2), precision)
+    reference_point = reference_point if reference_point is not None else to_point
 
-    start_point_distance_array = array_heuristic(GdsMap.x_array,
-                                                 GdsMap.y_array, from_point,
-                                                 GdsMap.grid_size)
-    end_point_distance_array = array_heuristic(GdsMap.x_array,
-                                               GdsMap.y_array, to_point,
-                                               GdsMap.grid_size)
     start_point_index = ma.MaskedArray.argmin(
-        ma.array(start_point_distance_array, mask=GdsMap.mask))
-    end_point_index = ma.MaskedArray.argmin(
-        ma.array(end_point_distance_array, mask=GdsMap.mask))
+        ma.array(
+            array_heuristic(
+                GdsMap.x_array,
+                GdsMap.y_array, 
+                from_point,
+                GdsMap.grid_size),
+            mask=GdsMap.mask))
+
     start_point = (start_point_index % GdsMap.x_length,
                    start_point_index // GdsMap.x_length)
+    
+    end_point_index = ma.MaskedArray.argmin(
+        ma.array(
+            array_heuristic(
+                GdsMap.x_array,
+                GdsMap.y_array,
+                to_point,
+                GdsMap.grid_size),
+            mask=GdsMap.mask))
+    
     end_point = (end_point_index % GdsMap.x_length,
                  end_point_index // GdsMap.x_length)
 
     start_time = time.time()
     route = jump_point_astar(GdsMap.mask, start_point, end_point)
     elapsed_time = round(time.time() - start_time, 3)
+
     if not route:
         print('--- Path not found after ' + str(elapsed_time) + 's ---')
         return False
     print('--- Found route in ' + str(elapsed_time) + 's ---')
 
     routed_path = []
-    if from_direction != None and to_direction != None:
-        routed_path.append(from_object.endpoints[from_end])
-    else:
-        routed_path.append(from_point)
+    routed_path.append(end_points[0])
     for point in route:
         routed_path.append(GdsMap.xy_array[point[1]][point[0]])
-    if from_direction != None and to_direction != None:
-        routed_path.append(to_object.endpoints[from_end])
-    else:
-        routed_path.append(to_point)
+    routed_path.append(end_points[1])
+
+    if directions != None:
+        routed_path[1] = from_point
+        routed_path[-2] = to_point
 
     index = 0
-    virtual_path_width = width[index] + 2 * path_buffer_distance[index]
-    neighbours, _ = get_neighbours(GdsMap, virtual_path_width)
+    neighbours, _ = get_neighbours(GdsMap, path_width[index] + 2 * path_buffer_distance[index])
 
     # Remove trivial points
     remove_index_list = []
@@ -567,17 +553,12 @@ def pathfinder(GdsMap,
         for neighbour in neighbours:
             GdsMap.mask[route[i - 1][1] + neighbour[1]][route[i - 1][0] + neighbour[0]] = 1
         if bipoint_angle(routed_path[i - 1], routed_path[i]) == bipoint_angle(routed_path[i], routed_path[i + 1]):
-            if heuristic(routed_path[i], distance_to_point, GdsMap.grid_size) < distances[index]:
+            if heuristic(routed_path[i], reference_point) < segment_distances[index]:
                 new_path_point_list.append(routed_path[i])
                 index += 1
-                virtual_path_width = width[index] + 2 * path_buffer_distance[index]
-                neighbours, _ = get_neighbours(GdsMap, virtual_path_width)
+                neighbours, _ = get_neighbours(GdsMap, path_width[index] + 2 * path_buffer_distance[index])
             else:
                 remove_index_list.append(i)
-
-    if from_direction != None and to_direction != None:
-        routed_path[1] = from_point
-        routed_path[-2] = to_point
 
     for index in reversed(remove_index_list):
         del routed_path[index]

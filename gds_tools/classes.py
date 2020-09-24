@@ -9,7 +9,7 @@ from recordclass import recordclass
 
 class GDStructure:
 
-    def __init__(self, structure, endpoints, endpoint_dims, endpoint_directions = None, method = None, args = {}):
+    def __init__(self, structure, endpoints = {}, endpoint_dims = {}, endpoint_directions = None, method = None, args = {}):
         """Define class to store structures in
 
         Args:
