@@ -3,7 +3,6 @@ import copy
 import numpy as np
 import gdspy as gp
 import gds_tools as gdst
-# import design_elements as elmt
 from operator import add, sub
 
 class GDSComponent:
@@ -667,7 +666,7 @@ class HoleyPath:
             self.widths = final_widths
             self.distances = final_distances
             if self.requested_hole_distance != None and self.hole_radius != None:
-                self.path_holey_ground.append(elmt.lattices.generate_holey_ground(gp.boolean(holey_ground, [], 'or', **self.holey_ground_spec),
+                self.path_holey_ground.append(generate_holey_ground(gp.boolean(holey_ground, [], 'or', **self.holey_ground_spec),
                                                                                      self.hole_radius,
                                                                                      self.requested_hole_distance,
                                                                                      self.round_verticies,
@@ -720,7 +719,7 @@ class HoleyPath:
                 path.direction = self.direction
 
         if self.requested_hole_distance != None and self.hole_radius != None:
-                self.path_holey_ground.append(elmt.lattices.generate_holey_ground(gp.boolean(holey_ground, [], 'or', **self.holey_ground_spec),
+                self.path_holey_ground.append(generate_holey_ground(gp.boolean(holey_ground, [], 'or', **self.holey_ground_spec),
                                                                                      self.hole_radius,
                                                                                      self.requested_hole_distance,
                                                                                      self.round_verticies,
@@ -953,3 +952,40 @@ class HoleyPath:
         new_waveguide.translate(dx, dy)
 
         return new_waveguide
+
+def generate_holey_ground(holey_ground, hole_radius, hole_distance, round_verticies, layer, datatype):
+    bb = holey_ground.get_bounding_box()
+    bb_width = abs(bb[1][0] - bb[0][0]) - 2 * hole_radius
+    bb_height = abs(bb[1][1] - bb[0][1]) - 2 * hole_radius
+    bb_x = (bb[0][0] + bb[1][0]) / 2
+    bb_y = (bb[0][1] + bb[1][1]) / 2
+    bb_min_x = bb_x - bb_width / 2
+    bb_max_x = bb_x + bb_width / 2
+    bb_min_y = bb_y - bb_height / 2
+    bb_max_y = bb_y + bb_height / 2
+
+    tot_h_double_distances = int((bb_width - bb_width % (np.sqrt(3) * hole_distance)) / (np.sqrt(3) * hole_distance))
+    h_double_distance = bb_width / (tot_h_double_distances - 1 / 2)
+    tot_v_distances = int((bb_height - bb_height % hole_distance) / hole_distance)
+    v_distance = bb_height / (tot_v_distances - 1 / 2)
+
+    circle = gp.Round((0, 0), hole_radius, number_of_points = round_verticies)
+    circle_points = np.array(circle.polygons[0])
+    circle_points_x = np.tile(circle_points[:,0], tot_h_double_distances)
+    circle_points_y = np.tile(circle_points[:,1], tot_v_distances)
+
+    circle_centers_x_0 = np.repeat(np.linspace(bb_min_x, bb_max_x, tot_h_double_distances), round_verticies)
+    circle_centers_y_0 = np.repeat(np.linspace(bb_min_y, bb_max_y, tot_v_distances), round_verticies)
+    coords_x_0 = np.tile(circle_points_x + circle_centers_x_0, tot_v_distances)
+    coords_y_0 = np.tile(circle_points_y, tot_h_double_distances) + np.repeat(circle_centers_y_0, tot_h_double_distances)
+    circle_polygons_0 = np.array([coords_x_0, coords_y_0]).T.reshape((tot_h_double_distances * tot_v_distances, round_verticies, 2))
+
+    circle_centers_x_1 = np.repeat(np.linspace(bb_min_x + h_double_distance / 2, bb_max_x + h_double_distance / 2, tot_h_double_distances), round_verticies)
+    circle_centers_y_1 = np.repeat(np.linspace(bb_min_y + v_distance / 2, bb_max_y + v_distance / 2, tot_v_distances), round_verticies)
+    coords_x_1 = np.tile(circle_points_x + circle_centers_x_1, tot_v_distances)
+    coords_y_1 = np.tile(circle_points_y, tot_h_double_distances) + np.repeat(circle_centers_y_1, tot_h_double_distances)
+    circle_polygons_1 = np.array([coords_x_1, coords_y_1]).T.reshape((tot_h_double_distances * tot_v_distances, round_verticies, 2))
+
+    circle_polygons = np.concatenate((circle_polygons_0, circle_polygons_1))
+    polygonset = gp.PolygonSet(circle_polygons)
+    return gp.fast_boolean(holey_ground, polygonset, 'and', layer = layer, datatype = datatype)
