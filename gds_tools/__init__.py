@@ -1,6 +1,6 @@
 # Module definitions
 import copy
-from gds_tools import functions, classes, routing, heal, geometry
+from gds_tools import functions, classes, routing, geometry
 
 # Handy constants
 a = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z'.split(',')
@@ -10,13 +10,11 @@ for i in range(1, 20):
         alphabet.append(c + str(i))
 
 # Aliases
-GDStructure = classes.GDStructure
-struct = classes.GDStructure
+GDSComponent = classes.GDSComponent
 instruction_parse = functions.instruction_parse
 add = functions.add
 save = functions.save
 flatten = functions.flatten
-cluster = functions.cluster
 lattice = functions.lattice
 lattice_cutter = functions.lattice_cutter
 

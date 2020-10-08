@@ -155,72 +155,60 @@ def lattice_cutter(lattice, objectlist, mode = 'and', layer = 0):
 
     return lattice
 
-def cluster(objectlist, endpoints, endpoint_dims, endpoint_directions = None, method = None, args = {}, ignore_conflict = False):
-    #============================
-    # Cluster list of structures \\
-    #=========================================================================
-    # Will combine GDStructure objects in a list so they will act as one    ||
-    # single structure. They will keep their individual properties.         ||
-    #                                                                       ||
-    # Arguments:    objectlist      :   list of GDStructure objects         ||
-    #               endpoints       :   dict of endpoints                   ||
-    #               endpoint_dims   :   dict of endpoint sizes              ||
-    #=========================================================================
-    if not ignore_conflict:
-        for i in endpoints:
-            if i in objectlist[0].endpoints:
-                print('Error: this endpoint already exists in first element of given list of structures to combine.\nCannot continue, as overwriting existing endpoints will result in broken compound structure.\nTo fix this, give different names to your new endpoints as input to this functions.\n')
-                return False
+# def cluster(objectlist, endpoints, endpoint_dims, endpoint_directions = None, method = None, args = {}, ignore_conflict = False):
+#     #============================
+#     # Cluster list of structures \\
+#     #=========================================================================
+#     # Will combine GDStructure objects in a list so they will act as one    ||
+#     # single structure. They will keep their individual properties.         ||
+#     #                                                                       ||
+#     # Arguments:    objectlist      :   list of GDStructure objects         ||
+#     #               endpoints       :   dict of endpoints                   ||
+#     #               endpoint_dims   :   dict of endpoint sizes              ||
+#     #=========================================================================
+#     if not ignore_conflict:
+#         for i in endpoints:
+#             if i in objectlist[0].endpoints:
+#                 print('Error: this endpoint already exists in first element of given list of structures to combine.\nCannot continue, as overwriting existing endpoints will result in broken compound structure.\nTo fix this, give different names to your new endpoints as input to this functions.\n')
+#                 return False
 
-    objectlist[0].endpoints = endpoints
-    objectlist[0].endpoint_dims = endpoint_dims
-    if endpoint_directions != None:
-        objectlist[0].endpoint_directions = endpoint_directions
-    else:
-        objectlist[0].endpoint_directions = {}
-    objectlist[0].compound += objectlist[1:]
+#     objectlist[0].endpoints = endpoints
+#     objectlist[0].endpoint_dims = endpoint_dims
+#     if endpoint_directions != None:
+#         objectlist[0].endpoint_directions = endpoint_directions
+#     else:
+#         objectlist[0].endpoint_directions = {}
+#     objectlist[0].compound += objectlist[1:]
 
-    objectlist[0].method = method
-    objectlist[0].__args_tuple__ = recordclass('args', args.keys())
-    objectlist[0].args = objectlist[0].__args_tuple__(**args)
+#     objectlist[0].method = method
+#     objectlist[0].__args_tuple__ = recordclass('args', args.keys())
+#     objectlist[0].args = objectlist[0].__args_tuple__(**args)
 
-    for i, object in enumerate(objectlist[1:]):
-        objectlist[0].next['COMPOUND_'+str(i)] = object
-        object.prev['COMPOUND_0'] = objectlist[0]
+#     for i, object in enumerate(objectlist[1:]):
+#         objectlist[0].next['COMPOUND_'+str(i)] = object
+#         object.prev['COMPOUND_0'] = objectlist[0]
 
-    return objectlist[0]
+#     return objectlist[0]
 
-def add(cell, objectlist):
+def add(cell, elements, recursive=False):
     #================================
     # Add structures to a gdspy cell \\
     #=========================================================================
     # Arguments:    cell        :   gdspy cell object                       ||
-    #               objectlist  :   list of GDStructure objects             ||
+    #               elements  :   list of GDStructure objects             ||
     #=========================================================================
-    if not isinstance(objectlist, list):
-        objectlist = [objectlist]
+    if not isinstance(elements, list):
+        elements = [elements]
 
-    structs = []
-    for object in objectlist:
-        if not isinstance(object, list):
-            if type(object) == gdst.classes.GDStructure or type(object) == gdst.classes.Waveguide:
-                if object.structure:
-                    if isinstance(object.structure, list):
-                        for structure in object.structure:
-                            structs.append(structure)
-                    else:
-                        structs.append(object.structure)
-                    
-                    if object.compound:
-                        gdst.add(cell, object.compound)
-            else:
-                cell.add(object)
+    for element in elements:
+        if isinstance(element, list):
+            gdst.add(cell, element)
         else:
-            gdst.add(cell, object)
-
-    cell.add(structs)
-
-    return cell
+            if isinstance(element, gdst.classes.GDSComponent):
+                for polygon in element.polygons:
+                    cell.add(polygon)
+            else:
+                cell.add(element)
 
 def mirror(p):
     #============================
