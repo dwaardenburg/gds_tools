@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import gdspy as gp
 import gds_tools as gdst
-import design_elements as elmt
+# import design_elements as elmt
 from operator import add, sub
 
 class GDSComponent:
@@ -345,13 +345,20 @@ class PathComponent(GDSComponent):
             direction = direction if isinstance(direction, float) else dir_str[direction]
             x, y = path.x, path.y
             path.rotate(- direction, center=(x, y))
+            width = lambda x: self.widths[i] + gdst.functions.biquadratic_func(x) * (final_widths[i] - self.widths[i])
             if self.distances[i] == 0:
-                width = lambda x: self.widths[i] + gdst.functions.biquadratic_func(x) * (final_widths[i] - self.widths[i])
-                path.parametric(lambda x: (x * length, 0), lambda x: (length, 0), final_width = width, max_points = 4094, number_of_evaluations = int(2 * length / point_distance), **self.layer_specs[i])
+                distance = None
             else:
                 distance = lambda x: self.distances[i] + gdst.functions.biquadratic_func(x) * (final_distances[i] - self.distances[i])
-                width = lambda x: self.widths[i] + gdst.functions.biquadratic_func(x) * (final_widths[i] - self.widths[i])
-                path.parametric(lambda x: (x * length, 0), lambda x: (length, 0), final_width = width, final_distance = distance, max_points = 4094, number_of_evaluations = int(2 * length / point_distance), **self.layer_specs[i])
+            path.parametric(
+                    lambda x: (x * length, 0),
+                    lambda x: (length, 0),
+                    final_width = width,
+                    final_distance = distance,
+                    max_points = 4094,
+                    number_of_evaluations = int(2 * length / point_distance),
+                    **self.layer_specs[i]
+                    )
             path.rotate(direction, center=(x, y))
 
         self.length += length
